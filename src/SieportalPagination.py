@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from math import ceil
+import asyncio
 from typing import Any, Callable, Optional
 
 from SieportalGetTreeApi import PageResult, SieportalTreeAPI
@@ -59,7 +60,7 @@ class Pagination:
     async def select_page(self, page_num: int) -> Any:
         if not (1 <= page_num <= self.max_page):
             raise ValueError(
-                f"Страница {page_num} не существует. Доступные страницы: от 1 до {self.max_page}",
+                f"The page {page_num} does not exist.Available pages: from 1 to {self.max_page}",
             )
 
         # Если страница уже в кэше, возвращаем её
@@ -75,20 +76,45 @@ class Pagination:
 
         return result
 
-    async def fetch_all(self) -> AsyncGenerator[PageResult, None]:
-        """Загружает все страницы и возращает гереатором"""
+    async def fetch_all(self, gorutine: int = 10) -> AsyncGenerator[PageResult, None]:
+        """Uploads all pages and returns the generator"""
+        tasks = []
+        completed = 0
+        
         for page_num in range(self.max_page):
+            # Если страница уже в кэше, сразу возвращаем
             if page_num in self.cache:
                 yield self.cache[page_num]
-            else:
-                yield await self.func(self._api, self._id, page_num)
+                completed += 1
+                continue
+                
+            # Добавляем задачу в очередь
+            tasks.append(asyncio.create_task(self.func(self._api, self._id, page_num)))
+            
+            # Если достигли лимита параллельных задач или это последняя страница
+            if len(tasks) >= gorutine or page_num == self.max_page - 1:
+                # Ждем завершения текущей группы задач
+                results = await asyncio.gather(*tasks)
+                
+                # Обрабатываем результаты
+                for result in results:
+                    yield result
+                    
+                # Очищаем список задач для следующей группы
+                tasks = []
+        
+        # Обрабатываем оставшиеся задачи (если есть)
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            for result in results:
+                yield result
 
     def get_cached_page(self, page_num: int) -> Optional[Any]:
-        """Возвращает страницу из кэша, если она существует"""
+        """Returns a page from the cache if it exists"""
         return self.cache.get(page_num)
 
     def clear_cache(self) -> None:
-        """Очищает кэш, оставляя только текущую страницу"""
+        """Cleans the cache, leaving only the current page"""
         current_page = self.page_now - 1
         if current_page in self.cache:
             current_data = self.cache[current_page]

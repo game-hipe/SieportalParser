@@ -85,7 +85,7 @@ class SieportalAPI:
                     method, url, *args, **kwargs,
                 ) as response:
                     response.raise_for_status()
-                    logger.debug("Status 200 for - %", url)
+                    logger.debug("Status 200 for - %s", url)
                     return await response.json()
             except aiohttp.ClientResponseError as error:
                 if error.status == HTTP_401_UNAUTHORIZED:
@@ -101,7 +101,7 @@ class SieportalAPI:
                 if error.status == HTTP_403_FORBIDDEN:
                     kwargs["proxy"] = random.choice(self.config.proxy_list)
                     logger.warning(
-                        "Inaccessible SID!I use proxy - %",
+                        "Inaccessible SID!I use proxy - %s",
                         kwargs["proxy"],
                     )
                     await asyncio.sleep(self.config.sleep_time * try_num)
@@ -110,7 +110,7 @@ class SieportalAPI:
 
                 if HTTP_500_INTERNAL_ERROR < error.status < HTTP_500_INTERNAL_ERROR + 100:
                     logger.info(
-                        "The problem of the server is waiting for ... - Trying % - %",
+                        "The problem of the server is waiting for ... - Trying %d - %d",
                         try_num,
                         error.status,
                     )
@@ -125,12 +125,12 @@ class SieportalAPI:
                     logger.info("There is no data ...")
                     return None
 
-                logger.exception("Inexpedient status: %", error.status)
+                logger.exception("Inexpedient status: %s", error.status)
                 return None
             except Exception as error:
-                logger.exception("Unknown error: %", error)
+                logger.exception("Unknown error: %s", error)
 
-        logger.warning("Could not reach the server for % of attempts", self.max_try)
+        logger.warning("Could not reach the server for %s of attempts", self.max_try)
         return None
 
     async def _get_token(self) -> str:
@@ -144,7 +144,7 @@ class SieportalAPI:
                     token_data = await response.json()
                     return f"Bearer {token_data['access_token']}"
             except Exception as e:
-                logger.exception("Token Error: %", e)
+                logger.exception("Token Error: %s", e)
 
 
 class SieportalTreeAPI(SieportalAPI):

@@ -57,7 +57,7 @@ def parse_args() ->  argparse.Namespace:
     parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
+        default="DEBUG",
         help="Logging level",
     )
 
@@ -108,41 +108,80 @@ async def parsing() -> None: # noqa: C901
         async with aiohttp.ClientSession() as session:
             # Аномалия 10000083, 10000800
             sie = SieportalTreeAPI(session, args.language, args.region)
+            tasks = []
 
             async for node_id in read(args.input):
-                data = await sie.get_tree_information(node_id)
-                if data is None:
-                    continue
-
-                logger.info(
-                    "Found products: %s, accessories %s - [%s]",
-                    data["variants"],
-                    data["product"],
-                    node_id,
+                
+                tasks.append(
+                    asyncio.create_task(sie.get_tree_information(node_id))
                 )
-                if data["variants"]:
-                    pagination = await Pagination.create(
-                        node_id, sie, SieportalTreeAPI.get_products,
-                    )
-                    if pagination is not None:
-                        async for page in pagination.fetch_all():
-                            if page is None:
-                                continue
-                            await writer.writerows(
-                                [[x.article, x.url] for x in page.items],
-                            )
+                if len(tasks) >= 10:
+                    for data in await asyncio.gather(*tasks):
+                        if data is None:
+                            continue
 
-                if data["product"]:
-                    pagination = await Pagination.create(
-                        node_id, sie, SieportalTreeAPI.get_accesories,
-                    )
-                    if pagination is None:
-                        continue
-                    async for page in pagination.fetch_all():
-                        if page is not None:
-                            await writer.writerows(
-                                [[x.article, x.url] for x in page.items],
+                        logger.info(
+                            "Found products: %s, accessories %s - [%s]",
+                            data["variants"],
+                            data["product"],
+                            node_id,
+                        )
+                        if data["variants"]:
+                            pagination = await Pagination.create(
+                                node_id, sie, SieportalTreeAPI.get_products,
                             )
+                            if pagination is not None:
+                                async for page in pagination.fetch_all():
+                                    if page is None:
+                                        continue
+                                    await writer.writerows(
+                                        [[x.article, x.url] for x in page.items],
+                                    )
+
+                        if data["product"]:
+                            pagination = await Pagination.create(
+                                node_id, sie, SieportalTreeAPI.get_accesories,
+                            )
+                            if pagination is None:
+                                continue
+                            async for page in pagination.fetch_all():
+                                if page is not None:
+                                    await writer.writerows(
+                                        [[x.article, x.url] for x in page.items],
+                                    )
+            if tasks:
+                for data in await asyncio.gather(*tasks):
+                    if data is None:
+                        continue
+
+                    logger.info(
+                        "Found products: %s, accessories %s - [%s]",
+                        data["variants"],
+                        data["product"],
+                        node_id,
+                    )
+                    if data["variants"]:
+                        pagination = await Pagination.create(
+                            node_id, sie, SieportalTreeAPI.get_products,
+                        )
+                        if pagination is not None:
+                            async for page in pagination.fetch_all():
+                                if page is None:
+                                    continue
+                                await writer.writerows(
+                                    [[x.article, x.url] for x in page.items],
+                                )
+                    if data["product"]:
+                        pagination = await Pagination.create(
+                            node_id, sie, SieportalTreeAPI.get_accesories,
+                        )
+                        if pagination is None:
+                            continue
+                        async for page in pagination.fetch_all():
+                            if page is not None:
+                                await writer.writerows(
+                                    [[x.article, x.url] for x in page.items],
+                                )
 
 
 if __name__ == "__main__":
